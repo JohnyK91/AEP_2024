@@ -10,6 +10,7 @@ import sys
 import shutil
 from subprocess import Popen, PIPE
 
+os.environ["MAMBA_NO_PROMPT"] = "1"
 r = Popen(["pip", "install", "rich"])
 r.wait()
 from rich.console import Console  # noqa
@@ -18,7 +19,7 @@ con = Console()
 PREFIX = "/usr/local/miniforge3/"
 
 has_conda = "conda version" in os.popen("%s/bin/conda info" % PREFIX).read()
-has_qiime = "QIIME 2 release:" in os.popen("qiime info").read()
+has_qiime = "QIIME 2 release:" in os.popen("/usr/local/qiime2/bin/qiime info").read()
 
 
 MINICONDA_PATH = (
@@ -65,17 +66,15 @@ def cleanup():
 def run_and_check(args, check, message, failure, success, console=con):
     """Run a command and check that it worked."""
     console.log(message)
-    r = Popen(args, env=os.environ, stdout=PIPE, stderr=PIPE,
-              universal_newlines=True)
+    r = Popen(args, env=os.environ, stdout=PIPE, stderr=PIPE, universal_newlines=True)
     o, e = r.communicate()
     out = o + e
-    if r.returncode == 0 and check in out:
+    if r.returncode == 0 and (check is None or check in out):
         console.log("[blue]%s[/blue]" % success)
     else:
         console.log("[red]%s[/red]" % failure, out)
         cleanup()
         sys.exit(1)
-
 
 if __name__ == "__main__":
     if not has_conda:
@@ -107,16 +106,17 @@ if __name__ == "__main__":
         )
 
         run_and_check(
-            [PREFIX + "bin/" + CONDA, "env", "create", *CONDA_ARGS, "--prefix", "/usr/local", "--file", QIIME_YAML],
-            "Verifying transaction: ...working... done",
+            [PREFIX + "bin/" + CONDA, "env", "create", "--yes", *CONDA_ARGS, "--prefix", "/usr/local/qiime2", "--file", QIIME_YAML],
+            None,
             ":mag: Installing Qiime 2. This may take a little bit.\n :clock1:",
             "could not install Qiime 2 :sob:",
             ":mag: Done."
         )
 
+
         run_and_check(
             ["pip", "install", "empress"],
-            "Successfully installed empress-",
+            None,
             ":evergreen_tree: Installing Empress...",
             "could not install Empress :sob:",
             ":evergreen_tree: Done."
@@ -125,7 +125,7 @@ if __name__ == "__main__":
         con.log(":mag: Qiime 2 is already installed. Skipped.")
 
     run_and_check(
-        ["qiime", "info"],
+        ["/usr/local/qiime2/bin/qiime", "info"],
         "QIIME 2 release:",
         ":bar_chart: Checking that Qiime 2 command line works...",
         "Qiime 2 command line does not seem to work :sob:",
@@ -145,6 +145,8 @@ if __name__ == "__main__":
         con.log("[blue]:bar_chart: Qiime 2 can be imported :tada:[/blue]")
 
     cleanup()
+
+    os.environ["PATH"] = "/usr/local/qiime2/bin:" + os.environ["PATH"]
 
     con.log("[green]Everything is A-OK. "
             "You can start using Qiime 2 now :thumbs_up:[/green]")
